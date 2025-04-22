@@ -1,24 +1,24 @@
 package com.bright.supportassistant.service
 
 import com.bright.supportassistant.model.SupportTicket
+import com.bright.supportassistant.model.TicketAttachment
 import com.bright.supportassistant.repository.SupportTicketRepository
 import org.springframework.ai.chat.client.ChatClient
-import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.ai.chat.messages.SystemMessage
 import org.springframework.ai.chat.messages.UserMessage
+import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.ai.document.Document
 import org.springframework.ai.vectorstore.SearchRequest
 import org.springframework.ai.vectorstore.VectorStore
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
-import kotlin.uuid.Uuid
 
 @Service
 class ResponseSuggestionService(
     private val supportTicketRepository: SupportTicketRepository,
     private val vectorStore: VectorStore,
-    private val attachmentService: AttachmentService,
     chatClientBuilder: ChatClient.Builder
 ) {
 
@@ -68,86 +68,22 @@ class ResponseSuggestionService(
         val ticketDocument = Document.builder()
             .id(UUID.randomUUID().toString())
             .text("${savedTicket.title} ${savedTicket.customerMessage} ${savedTicket.agentResponse}")
-            .metadata(mapOf(
-                "type" to "ticket",
-                "ticketId" to (savedTicket.id ?: 0),
-                "title" to savedTicket.title,
-                "customerMessage" to savedTicket.customerMessage,
-                "agentResponse" to savedTicket.agentResponse,
-                "category" to savedTicket.category,
-                "status" to savedTicket.status.name
-            ))
+            .metadata(
+                mapOf(
+                    "type" to "ticket",
+                    "ticketId" to (savedTicket.id ?: 0),
+                    "title" to savedTicket.title,
+                    "customerMessage" to savedTicket.customerMessage,
+                    "agentResponse" to savedTicket.agentResponse,
+                    "category" to savedTicket.category,
+                    "status" to savedTicket.status.name
+                )
+            )
             .build()
 
-        // Add the ticket document to the vector store
         vectorStore.add(listOf(ticketDocument))
-
-        // Process attachments if any
-        if (savedTicket.attachments.isNotEmpty()) {
-            val attachmentDocuments = savedTicket.attachments.map { 
-                attachmentService.attachmentToDocument(it)
-            }
-
-            // Add attachment documents to the vector store
-            if (attachmentDocuments.isNotEmpty()) {
-                vectorStore.add(attachmentDocuments)
-            }
-        }
 
         return savedTicket
-    }
-
-    /**
-     * Get a ticket by ID
-     */
-    fun getTicket(ticketId: Int): SupportTicket? {
-        return supportTicketRepository.findById(ticketId).orElse(null)
-    }
-
-    /**
-     * Update a ticket in the vector store
-     */
-    @Transactional
-    fun updateTicketInVectorStore(ticket: SupportTicket) {
-        // Delete existing documents for this ticket
-        vectorStore.delete("ticket-${ticket.id}")
-
-        // Create a new document for the ticket
-        val ticketDocument = Document.builder()
-            .id("ticket-${ticket.id}")
-            .text("${ticket.title} ${ticket.customerMessage} ${ticket.agentResponse}")
-            .metadata(mapOf(
-                "type" to "ticket",
-                "ticketId" to (ticket.id ?: 0),
-                "title" to ticket.title,
-                "customerMessage" to ticket.customerMessage,
-                "agentResponse" to ticket.agentResponse,
-                "category" to ticket.category,
-                "status" to ticket.status.name
-            ))
-            .build()
-
-        // Add the ticket document to the vector store
-        vectorStore.add(listOf(ticketDocument))
-
-        // Process attachments
-        if (ticket.attachments.isNotEmpty()) {
-            // Delete existing attachment documents
-            ticket.attachments.forEach { attachment ->
-                if (attachment.id != null) {
-                    vectorStore.delete("attachment-${attachment.id}")
-                }
-            }
-
-            // Add new attachment documents
-            val attachmentDocuments = ticket.attachments.map { 
-                attachmentService.attachmentToDocument(it)
-            }
-
-            if (attachmentDocuments.isNotEmpty()) {
-                vectorStore.add(attachmentDocuments)
-            }
-        }
     }
 
     private fun generateLLMResponse(customerMessage: String, context: String): String {
@@ -169,5 +105,20 @@ class ResponseSuggestionService(
         val response = chatClient.prompt(prompt).call()
 
         return response.content()!!
+    }
+
+    @Transactional
+    fun attachAttachment(ticketId: Int, file: MultipartFile): TicketAttachment {
+        val ticket = supportTicketRepository.getReferenceById(ticketId)
+
+        ticket.addAttachment(file)
+
+        supportTicketRepository.save(ticket)
+
+        val attachment = ticket.attachments.last()
+
+        vectorStore.add(listOf(attachmentToDocument(attachment)))
+
+        return attachment
     }
 }

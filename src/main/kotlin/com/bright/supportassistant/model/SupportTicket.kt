@@ -1,6 +1,7 @@
 package com.bright.supportassistant.model
 
 import jakarta.persistence.*
+import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDateTime
 
 @Entity
@@ -63,13 +64,39 @@ data class SupportTicket(
         return "SupportTicket(id=$id, title='$title', category='$category', status=$status, createdAt=$createdAt, attachmentsCount=${attachments.size})"
     }
 
-    fun addAttachment(attachment: TicketAttachment) {
+    fun addAttachment(file: MultipartFile) {
+        val attachment = toAttachment(file)
         attachments.add(attachment)
     }
 
+    fun SupportTicket.toAttachment(file: MultipartFile): TicketAttachment {
+        val contentType = file.contentType ?: "application/octet-stream"
+        val fileName = file.originalFilename ?: "unnamed-file"
+        return when {
+            contentType == "text/plain" -> {
+                // For text files, store as text
+                TicketAttachment(
+                    ticket = this,
+                    fileName = fileName,
+                    contentType = contentType,
+                    content = String(file.bytes)
+                )
+            }
 
-}
+            else -> {
+                // Default case, store as binary
+                TicketAttachment(
+                    ticket = this,
+                    fileName = fileName,
+                    contentType = contentType,
+                    binaryContent = file.bytes
+                )
+            }
+        }
+    }
 
-enum class TicketStatus {
-    OPEN, RESOLVED, CLOSED
-}
+    }
+
+    enum class TicketStatus {
+        OPEN, RESOLVED, CLOSED
+    }

@@ -3,7 +3,6 @@ package com.bright.supportassistant.integration
 import com.bright.supportassistant.model.SupportTicket
 import com.bright.supportassistant.model.TicketStatus
 import com.bright.supportassistant.repository.SupportTicketRepository
-import com.bright.supportassistant.service.AttachmentService
 import com.bright.supportassistant.service.ResponseSuggestionService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -39,16 +38,11 @@ class SupportAssistantIntegrationTest {
     private lateinit var supportTicketRepository: SupportTicketRepository
 
     @Autowired
-    private lateinit var embeddingModel: EmbeddingModel
-
-    @Autowired
     private lateinit var vectorStore: VectorStore
 
     @Autowired
     private lateinit var responseSuggestionService: ResponseSuggestionService
 
-    @Autowired
-    private lateinit var attachmentService: AttachmentService
 
     // Test data
     private lateinit var passwordResetTicket: SupportTicket
@@ -293,7 +287,7 @@ class SupportAssistantIntegrationTest {
         )
 
         // Add the attachment to the ticket
-        val attachment = attachmentService.saveAttachment(savedTicket, mockFile)
+        val attachment = responseSuggestionService.attachAttachment(savedTicket.id!!, mockFile)
 
         // Create a document for the attachment and add it directly to the vector store
         val attachmentDocument = Document.builder()
@@ -301,7 +295,7 @@ class SupportAssistantIntegrationTest {
             .text(attachmentContent)
             .metadata(mapOf(
                 "type" to "attachment",
-                "ticketId" to (savedTicket.id ?: 0),
+                "ticketId" to (savedTicket.id!!),
                 "fileName" to attachment.fileName,
                 "contentType" to attachment.contentType
             ))

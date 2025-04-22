@@ -2,7 +2,6 @@ package com.bright.supportassistant.controller
 
 import com.bright.supportassistant.model.SupportTicket
 import com.bright.supportassistant.model.TicketStatus
-import com.bright.supportassistant.service.AttachmentService
 import com.bright.supportassistant.service.ResponseSuggestionService
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.*
@@ -12,7 +11,6 @@ import org.springframework.web.multipart.MultipartFile
 @RequestMapping("/api/support")
 class SupportAssistantController(
     private val responseSuggestionService: ResponseSuggestionService,
-    private val attachmentService: AttachmentService
 ) {
 
     @PostMapping("/suggest")
@@ -39,13 +37,7 @@ class SupportAssistantController(
         @PathVariable ticketId: Int,
         @RequestParam("file") file: MultipartFile
     ): Map<String, String> {
-        val ticket = responseSuggestionService.getTicket(ticketId)
-            ?: throw IllegalArgumentException("Ticket not found with ID: $ticketId")
-
-        val attachment = attachmentService.saveAttachment(ticket, file)
-
-        // Update the ticket in the vector store
-        responseSuggestionService.updateTicketInVectorStore(ticket)
+        val attachment = responseSuggestionService.attachAttachment(ticketId, file)
 
         return mapOf(
             "message" to "Attachment added successfully",
