@@ -3,7 +3,6 @@ package com.bright.supportassistant.service
 import com.bright.supportassistant.model.SupportTicket
 import com.bright.supportassistant.model.TicketStatus
 import com.bright.supportassistant.repository.SupportTicketRepository
-import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
@@ -12,7 +11,7 @@ import java.util.Random
 @Component
 class TestDataGenerator(
     private val supportTicketRepository: SupportTicketRepository,
-    private val embeddingModel: EmbeddingModel
+    private val responseSuggestionService: ResponseSuggestionService
 ) {
 
 //    @EventListener(ApplicationReadyEvent::class)
@@ -93,32 +92,21 @@ class TestDataGenerator(
             val status = statuses[random.nextInt(statuses.size)]
             val title = "Support Request #${i + 1000}"
 
-            // Generate embedding for the ticket content
-            val embedding = embeddingModel.embed(
-                "$title $questionVariation $responseVariation"
-            )
-
             val ticket = SupportTicket(
                 title = title,
                 customerMessage = questionVariation,
                 agentResponse = responseVariation,
                 category = category,
-                status = status,
-                embedding = embedding
+                status = status
             )
 
-            tickets.add(ticket)
+            // Use ResponseSuggestionService to create the ticket and add it to the vector store
+            responseSuggestionService.createTicket(ticket)
 
             // Save in batches to avoid memory issues
             if (tickets.size >= 100) {
-                supportTicketRepository.saveAll(tickets)
                 tickets.clear()
             }
-        }
-
-        // Save any remaining tickets
-        if (tickets.isNotEmpty()) {
-            supportTicketRepository.saveAll(tickets)
         }
 
         println("Generated 1000 test support tickets")

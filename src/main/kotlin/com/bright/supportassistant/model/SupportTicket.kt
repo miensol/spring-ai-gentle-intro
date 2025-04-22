@@ -1,9 +1,6 @@
 package com.bright.supportassistant.model
 
 import jakarta.persistence.*
-import org.hibernate.annotations.Array
-import org.hibernate.annotations.JdbcTypeCode
-import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 
 @Entity
@@ -29,10 +26,8 @@ data class SupportTicket(
     @Column(name = "created_at")
     val createdAt: LocalDateTime = LocalDateTime.now(),
 
-    @JdbcTypeCode(SqlTypes.VECTOR)
-    @Column(name = "embedding")
-    @Array(length = 1024) // must match dimensions of the embedding model
-    val embedding: FloatArray? = null
+    @OneToMany(mappedBy = "ticket", cascade = [CascadeType.ALL], orphanRemoval = true)
+    val attachments: MutableList<TicketAttachment> = mutableListOf()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -47,10 +42,7 @@ data class SupportTicket(
         if (category != other.category) return false
         if (status != other.status) return false
         if (createdAt != other.createdAt) return false
-        if (embedding != null) {
-            if (other.embedding == null) return false
-            if (!embedding.contentEquals(other.embedding)) return false
-        } else if (other.embedding != null) return false
+        // Not comparing attachments to avoid circular reference issues
 
         return true
     }
@@ -63,12 +55,16 @@ data class SupportTicket(
         result = 31 * result + category.hashCode()
         result = 31 * result + status.hashCode()
         result = 31 * result + createdAt.hashCode()
-        result = 31 * result + (embedding?.contentHashCode() ?: 0)
+        // Not including attachments in hashCode to avoid circular reference issues
         return result
     }
 
     override fun toString(): String {
-        return "SupportTicket(createdAt=$createdAt, status=$status, category='$category', agentResponse='$agentResponse', customerMessage='$customerMessage', title='$title', id=$id)"
+        return "SupportTicket(id=$id, title='$title', category='$category', status=$status, createdAt=$createdAt, attachmentsCount=${attachments.size})"
+    }
+
+    fun addAttachment(attachment: TicketAttachment) {
+        attachments.add(attachment)
     }
 
 
